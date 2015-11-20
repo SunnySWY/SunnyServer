@@ -9,6 +9,9 @@ class SunnyServer:
     
     def createServer(self):
         coro = self.loop.create_server(EchoServerProtocol, '127.0.0.1', 8888)
+        print('================')
+        print('= Server start =')
+        print('================')
         return self.loop.run_until_complete(coro)
     
     def mainRun(self):

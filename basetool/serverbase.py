@@ -8,7 +8,7 @@ class EchoServerProtocol(asyncio.Protocol):
     HEAD_LENGTH = struct.calcsize(HEAD_FORMAT)
     def __init__(self):
         self.transport      = None
-        self.recieve_data   = ''
+        self.recieve_data   = ''.encode()
         self.wait_callbacks = {}
         self.sequence       = 0
         self.loop           = asyncio.get_event_loop()
@@ -41,7 +41,7 @@ class EchoServerProtocol(asyncio.Protocol):
             if buffer_length < buffer_length:
                 self.recieve_data = ''
                 return
-            self.loop.call_soon_threadsafe(self.pick_method)
+            self.loop.call_soon_threadsafe(self.pick_method, _message_type)
             self.sequence += 1
             self.recieve_data = self.recieve_data[_message_end:]
             buffer_length = len(self.recieve_data)

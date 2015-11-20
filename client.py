@@ -15,7 +15,7 @@ class SunnyClient:
     @asyncio.coroutine
     def doSomething(self):
         for _ in range(10):
-            test = yield from self.p.remote_call('Hello World')
+            test = yield from self.p.remote_call('test', args=[1,2,3])
             print('get call back!!!', test)
     
     def mainRun(self):
