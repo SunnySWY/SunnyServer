@@ -1,6 +1,5 @@
 import asyncio
 import struct
-import functools
 from   pickle                import dumps, loads
 from   basetool.baseconstant import HEAD_FORMAT, INFORM, CALL, ANSWER
 from   handler               import testhandler
@@ -24,12 +23,12 @@ class EchoServerProtocol(asyncio.Protocol):
         print('Remote call is called')
         future = asyncio.Future()
         message_data = dumps((func_name, args))
-        self.send_only(message_data, CALL)
+        self.send_only(self.sequence, message_data, CALL)
         self.wait_callbacks[self.sequence] = future
         return future
     
-    def send_only(self, message_data, message_type):
-        _head = struct.pack(HEAD_FORMAT, self.sequence, message_type, len(message_data))
+    def send_only(self, seq_id, message_data, message_type):
+        _head = struct.pack(HEAD_FORMAT, seq_id, message_type, len(message_data))
         self.transport.write(_head + message_data)        
 
     def data_received(self, data):
@@ -41,30 +40,35 @@ class EchoServerProtocol(asyncio.Protocol):
             if buffer_length < buffer_length:
                 self.recieve_data = ''
                 return
-            self.loop.call_soon_threadsafe(self.pick_method, _seq_id, _message_type, self.recieve_data[self.HEAD_LENGTH:_message_end])
+            asyncio.ensure_future(self.pick_data(_seq_id, _message_type, self.recieve_data[self.HEAD_LENGTH:_message_end]))
             self.sequence += 1
             self.recieve_data = self.recieve_data[_message_end:]
             buffer_length = len(self.recieve_data)
             
-    def pick_method(self, _seq_id, message_type, message_data):
+    def pick_data(self, _seq_id, message_type, message_data):
         if message_type == CALL:
-            _func_name, args = loads(message_data)
-            if not hasattr(testhandler, _func_name):
-                print('Wrong Remote Call method!!!')
-                return
-            this_function = getattr(testhandler, _func_name)
+            res = yield from self.search_local_method(message_data)
+            self.send_only(_seq_id, dumps(res), ANSWER)
         elif message_type == INFORM:
-            _func_name, args = loads(message_data)
-            if not hasattr(testhandler, _func_name):
-                print('Wrong acknowledge method!!!')
-                return 
-            this_function = getattr(testhandler, _func_name)
-            this_function(args)
+            yield from self.search_local_method(message_data)
         elif message_type == ANSWER:
-            if not self.wait_callbacks.has_key(_seq_id):
+            future_obj = self.wait_callbacks.pop(_seq_id, None)
+            if not future_obj:
                 print('Wrong callback method!!!')
                 return
-            self.wait_callbacks[_seq_id].set_result(loads(message_data))
+            future_obj.set_result(loads(message_data))
+            
+    def search_local_method(self, message_data):
+        _func_name, args = loads(message_data)
+        if not hasattr(testhandler, _func_name):
+            print('Wrong Remote Call method!!!')
+            return
+        this_function = getattr(testhandler, _func_name)
+        if asyncio.iscoroutinefunction(this_function):
+            __result__ = yield from this_function(args)
+        else:
+            __result__ = this_function(args)
+        return __result__
         
     def connection_lost(self, exc):
         pass
